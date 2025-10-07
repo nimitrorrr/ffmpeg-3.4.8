@@ -69,8 +69,44 @@ jobs:
             --enable-parser=aac,mpegaudio,vorbis,flac \
             --enable-protocol=file
 
-      - name: Build FFmpeg
-        run: make -j$(nproc)
+    - name: Build FFmpeg
+      run: |
+        chmod +x configure
+
+        # Устанавливаем gas-preprocessor
+        curl -L https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl -o /usr/local/bin/gas-preprocessor.pl
+        chmod +x /usr/local/bin/gas-preprocessor.pl
+
+        export ANDROID_NDK=$HOME/android-sdk/ndk/21.4.7075529
+        export PATH=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+
+        ./configure \
+          --prefix=$PWD/build/armeabi-v7a \
+          --target-os=android \
+          --arch=arm \
+          --cpu=armv7-a \
+          --cross-prefix=arm-linux-androideabi- \
+          --sysroot=$ANDROID_NDK/platforms/android-21/arch-arm \
+          --enable-cross-compile \
+          --enable-shared \
+          --disable-static \
+          --disable-doc \
+          --disable-programs \
+          --enable-small \
+          --disable-avdevice \
+          --disable-postproc \
+          --disable-symver \
+          --disable-ffplay \
+          --disable-ffmpeg \
+          --disable-ffprobe \
+          --disable-network \
+          --disable-bsfs \
+          --disable-filters \
+          --disable-debug
+
+        make -j$(nproc)
+        make install
+
 
       - name: Install FFmpeg
         run: make install
