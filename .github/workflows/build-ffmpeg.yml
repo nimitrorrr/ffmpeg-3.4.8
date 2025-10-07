@@ -1,9 +1,46 @@
-      - name: Configure FFmpeg
+name: Build FFmpeg 3.4.8 Android ARMv7
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip make yasm autoconf automake libtool pkg-config curl
+
+      - name: Download NDK r16b
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r16b-linux-x86_64.zip
+          unzip -q android-ndk-r16b-linux-x86_64.zip
+          echo "ANDROID_NDK=$PWD/android-ndk-r16b" >> $GITHUB_ENV
+          echo "$PWD/android-ndk-r16b" >> $GITHUB_PATH
+
+      - name: Add gas-preprocessor
+        run: |
+          sudo curl -L https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl -o /usr/local/bin/gas-preprocessor.pl
+          sudo chmod +x /usr/local/bin/gas-preprocessor.pl
+
+      - name: Fix permissions for scripts
+        run: |
+          chmod +x configure
+          chmod -R +x ffbuild
+
+      - name: Configure FFmpeg 3.4.8 for Android ARMv7
         run: |
           export ANDROID_NDK=$PWD/android-ndk-r16b
           export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
           export SYSROOT=$ANDROID_NDK/platforms/android-16/arch-arm
           export PATH=$TOOLCHAIN/bin:$PATH
+
           export CROSS_PREFIX=arm-linux-androideabi-
           export CC="${CROSS_PREFIX}gcc --sysroot=$SYSROOT"
           export CXX="${CROSS_PREFIX}g++ --sysroot=$SYSROOT"
@@ -18,7 +55,7 @@
             --enable-cross-compile \
             --cross-prefix=$CROSS_PREFIX \
             --sysroot=$SYSROOT \
-            --extra-cflags="-isysroot $SYSROOT/usr/include -I$SYSROOT/usr/include -march=armv7-a" \
+            --extra-cflags="-isysroot $SYSROOT/usr/include -I$SYSROOT/usr/include" \
             --extra-ldflags="-L$SYSROOT/usr/lib" \
             --enable-shared \
             --disable-static \
@@ -29,3 +66,19 @@
             --disable-ffprobe \
             --disable-network \
             --disable-avdevice
+
+      - name: Build
+        run: |
+          export ANDROID_NDK=$PWD/android-ndk-r16b
+          export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          make -j$(nproc)
+
+      - name: Install
+        run: make install
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-3.4.8-lib
+          path: build/armeabi-v7a
