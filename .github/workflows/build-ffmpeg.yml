@@ -1,0 +1,70 @@
+name: Build FFmpeg 3.4.8 for Android ARMv7
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip make clang autoconf automake libtool pkg-config
+
+      - name: Set up Android SDK & NDK (r21e)
+        run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdtools.zip
+          unzip cmdtools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools/latest
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/latest/
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_SDK_ROOT "ndk;21.4.7075529"
+
+      - name: Configure FFmpeg 3.4.8 for Android ARMv7
+        run: |
+          export ANDROID_NDK=$HOME/android-sdk/ndk/21.4.7075529
+          export TOOLCHAIN=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64
+          export API=21
+          export SYSROOT=$TOOLCHAIN/sysroot
+          export PATH=$TOOLCHAIN/bin:$PATH
+          export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi${API}-clang
+          export CXX=$TOOLCHAIN/bin/armv7a-linux-androideabi${API}-clang++
+
+          ./configure \
+            --prefix=$PWD/build/armeabi-v7a \
+            --target-os=android \
+            --arch=arm \
+            --cpu=armv7-a \
+            --cross-prefix=$TOOLCHAIN/bin/arm-linux-androideabi- \
+            --sysroot=$SYSROOT \
+            --enable-cross-compile \
+            --enable-shared \
+            --disable-static \
+            --disable-doc \
+            --disable-programs \
+            --enable-avresample \
+            --disable-everything \
+            --enable-decoder=aac,mp3,mp2,flac,vorbis,pcm_s16le,pcm_u8,wmav2 \
+            --enable-demuxer=mp3,aac,wav,flac,ogg,wma \
+            --enable-parser=aac,mpegaudio,vorbis,flac \
+            --enable-protocol=file
+
+      - name: Build FFmpeg
+        run: make -j$(nproc)
+
+      - name: Install FFmpeg
+        run: make install
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-3.4.8-android-armv7
+          path: build/armeabi-v7a/
