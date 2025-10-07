@@ -29,9 +29,13 @@ jobs:
           sudo curl -L https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl -o /usr/local/bin/gas-preprocessor.pl
           sudo chmod +x /usr/local/bin/gas-preprocessor.pl
 
-      - name: Configure FFmpeg
+      - name: Fix permissions
         run: |
           chmod +x configure
+          chmod -R +x ffbuild
+
+      - name: Configure FFmpeg
+        run: |
           export ANDROID_NDK=$PWD/android-ndk-r16b
           export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
           export SYSROOT=$ANDROID_NDK/platforms/android-16/arch-arm
@@ -60,7 +64,11 @@ jobs:
             --disable-avdevice
 
       - name: Build
-        run: make -j$(nproc)
+        run: |
+          export ANDROID_NDK=$PWD/android-ndk-r16b
+          export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          make -j$(nproc)
 
       - name: Install
         run: make install
