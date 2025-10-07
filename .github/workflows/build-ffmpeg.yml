@@ -7,78 +7,129 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-
+        
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip make yasm autoconf automake libtool pkg-config curl
-
+          sudo apt-get install -y wget unzip make yasm nasm autoconf automake libtool pkg-config curl build-essential
+          
       - name: Download NDK r16b
         run: |
           wget https://dl.google.com/android/repository/android-ndk-r16b-linux-x86_64.zip
           unzip -q android-ndk-r16b-linux-x86_64.zip
           echo "ANDROID_NDK=$PWD/android-ndk-r16b" >> $GITHUB_ENV
-          echo "$PWD/android-ndk-r16b" >> $GITHUB_PATH
-
+          
       - name: Add gas-preprocessor
         run: |
           sudo curl -L https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl -o /usr/local/bin/gas-preprocessor.pl
           sudo chmod +x /usr/local/bin/gas-preprocessor.pl
-
-      - name: Fix permissions for scripts
+          
+      - name: Download FFmpeg 3.4.8
         run: |
-          chmod +x configure
-          chmod -R +x ffbuild
-
-      - name: Configure FFmpeg 3.4.8 for Android ARMv7
+          wget https://ffmpeg.org/releases/ffmpeg-3.4.8.tar.bz2
+          tar -xjf ffmpeg-3.4.8.tar.bz2
+          cd ffmpeg-3.4.8
+          
+      - name: Configure FFmpeg for Android ARMv7
         run: |
-          export ANDROID_NDK=$PWD/android-ndk-r16b
+          cd ffmpeg-3.4.8
+          export ANDROID_NDK=$PWD/../android-ndk-r16b
           export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
           export SYSROOT=$ANDROID_NDK/platforms/android-16/arch-arm
           export PATH=$TOOLCHAIN/bin:$PATH
-
-          export CROSS_PREFIX=arm-linux-androideabi-
-          export CC="${CROSS_PREFIX}gcc --sysroot=$SYSROOT"
-          export CXX="${CROSS_PREFIX}g++ --sysroot=$SYSROOT"
-          export LD="${CROSS_PREFIX}ld"
-          export AS="gas-preprocessor.pl -- ${CC}"
-
+          
           ./configure \
-            --prefix=$PWD/build/armeabi-v7a \
+            --prefix=$PWD/../build/armeabi-v7a \
             --target-os=android \
             --arch=arm \
             --cpu=armv7-a \
             --enable-cross-compile \
-            --cross-prefix=$CROSS_PREFIX \
+            --cross-prefix=arm-linux-androideabi- \
             --sysroot=$SYSROOT \
-            --extra-cflags="-isysroot $SYSROOT/usr/include -I$SYSROOT/usr/include" \
-            --extra-ldflags="-L$SYSROOT/usr/lib" \
+            --cc=arm-linux-androideabi-gcc \
+            --cxx=arm-linux-androideabi-g++ \
+            --nm=arm-linux-androideabi-nm \
+            --ar=arm-linux-androideabi-ar \
+            --ranlib=arm-linux-androideabi-ranlib \
+            --strip=arm-linux-androideabi-strip \
+            --extra-cflags="-O3 -fPIC -DANDROID -D__ANDROID__ -D__ARM_ARCH_7A__ -mfloat-abi=softfp -mfpu=neon -march=armv7-a -mtune=cortex-a8" \
+            --extra-ldflags="-Wl,--fix-cortex-a8 -L$SYSROOT/usr/lib" \
             --enable-shared \
             --disable-static \
             --disable-doc \
+            --disable-htmlpages \
+            --disable-manpages \
+            --disable-podpages \
+            --disable-txtpages \
             --disable-programs \
             --disable-ffmpeg \
             --disable-ffplay \
             --disable-ffprobe \
-            --disable-network \
-            --disable-avdevice
-
-      - name: Build
+            --disable-ffserver \
+            --disable-avdevice \
+            --disable-postproc \
+            --enable-network \
+            --enable-protocol=file \
+            --enable-protocol=http \
+            --enable-protocol=https \
+            --enable-protocol=tcp \
+            --enable-protocol=udp \
+            --enable-protocol=rtp \
+            --enable-protocol=rtmp \
+            --enable-avfilter \
+            --enable-pic \
+            --enable-small \
+            --enable-neon \
+            --enable-asm \
+            --enable-inline-asm
+            
+      - name: Build FFmpeg
         run: |
-          export ANDROID_NDK=$PWD/android-ndk-r16b
+          cd ffmpeg-3.4.8
+          export ANDROID_NDK=$PWD/../android-ndk-r16b
           export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
           export PATH=$TOOLCHAIN/bin:$PATH
           make -j$(nproc)
-
-      - name: Install
-        run: make install
-
+          
+      - name: Install FFmpeg
+        run: |
+          cd ffmpeg-3.4.8
+          make install
+          
+      - name: Verify libraries
+        run: |
+          echo "Checking built libraries:"
+          ls -lh build/armeabi-v7a/lib/
+          file build/armeabi-v7a/lib/*.so
+          
+      - name: Copy libraries
+        run: |
+          mkdir -p output/lib/armeabi-v7a
+          mkdir -p output/include
+          cp build/armeabi-v7a/lib/libavcodec.so* output/lib/armeabi-v7a/ || true
+          cp build/armeabi-v7a/lib/libavformat.so* output/lib/armeabi-v7a/ || true
+          cp build/armeabi-v7a/lib/libavutil.so* output/lib/armeabi-v7a/ || true
+          cp build/armeabi-v7a/lib/libavfilter.so* output/lib/armeabi-v7a/ || true
+          cp build/armeabi-v7a/lib/libswscale.so* output/lib/armeabi-v7a/ || true
+          cp build/armeabi-v7a/lib/libswresample.so* output/lib/armeabi-v7a/ || true
+          cp -r build/armeabi-v7a/include/* output/include/
+          echo "Libraries copied:"
+          ls -lh output/lib/armeabi-v7a/
+          
+      - name: Create archive
+        run: |
+          cd output
+          tar -czf ../ffmpeg-3.4.8-android-armv7.tar.gz .
+          
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-3.4.8-lib
-          path: build/armeabi-v7a
+          name: ffmpeg-3.4.8-android-armv7
+          path: |
+            ffmpeg-3.4.8-android-armv7.tar.gz
+            output/lib/armeabi-v7a/*.so
+            output/include/
