@@ -1,6 +1,7 @@
 name: Build FFmpeg 3.4.8 for Android (armeabi-v7a)
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
@@ -11,52 +12,50 @@ jobs:
       - name: Checkout FFmpeg source
         uses: actions/checkout@v4
 
-      - name: Set up Android SDK and NDK
-        uses: android-actions/setup-android@v3
-        with:
-          sdk-version: 9123335
-
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake build-essential cmake git libtool pkg-config curl
+          sudo apt-get install -y autoconf automake build-essential cmake git libtool pkg-config curl yasm
 
-      - name: Prepare NDK and PATH
+      - name: Download Android NDK r21e
         run: |
-          export ANDROID_NDK=$HOME/android-sdk/ndk/21.4.7075529
-          echo "ANDROID_NDK=$ANDROID_NDK" >> $GITHUB_ENV
-          echo "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          wget https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip
+          unzip -q android-ndk-r21e-linux-x86_64.zip
+          echo "ANDROID_NDK=$PWD/android-ndk-r21e" >> $GITHUB_ENV
+          echo "$PWD/android-ndk-r21e/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: Add gas-preprocessor (needed for old FFmpeg)
+      - name: Add gas-preprocessor (needed for FFmpeg 3.x)
         run: |
           sudo curl -L https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl -o /usr/local/bin/gas-preprocessor.pl
           sudo chmod +x /usr/local/bin/gas-preprocessor.pl
 
-      - name: Configure FFmpeg
+      - name: Configure FFmpeg for Android ARMv7
         run: |
           chmod +x configure
+          export ANDROID_NDK=$ANDROID_NDK
+          export SYSROOT=$ANDROID_NDK/platforms/android-21/arch-arm
+          export TOOLCHAIN=$ANDROID_NDK/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64
+          export PATH=$TOOLCHAIN/bin:$PATH
+          export CROSS_PREFIX=arm-linux-androideabi-
+          export CC="${CROSS_PREFIX}gcc"
+          export CXX="${CROSS_PREFIX}g++"
           ./configure \
             --prefix=$PWD/build/armeabi-v7a \
             --target-os=android \
             --arch=arm \
             --cpu=armv7-a \
-            --cross-prefix=arm-linux-androideabi- \
-            --sysroot=$HOME/android-sdk/ndk/21.4.7075529/platforms/android-21/arch-arm \
             --enable-cross-compile \
+            --sysroot=$SYSROOT \
+            --cross-prefix=$CROSS_PREFIX \
             --enable-shared \
             --disable-static \
             --disable-doc \
             --disable-programs \
-            --enable-small \
-            --disable-avdevice \
-            --disable-postproc \
-            --disable-symver \
-            --disable-ffplay \
             --disable-ffmpeg \
+            --disable-ffplay \
             --disable-ffprobe \
+            --disable-avdevice \
             --disable-network \
-            --disable-bsfs \
-            --disable-filters \
             --disable-debug
 
       - name: Build FFmpeg
@@ -64,8 +63,8 @@ jobs:
           make -j$(nproc)
           make install
 
-      - name: Upload compiled .so and headers
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-android-libs
+          name: ffmpeg-3.4.8-android-armv7
           path: build/armeabi-v7a
