@@ -30,7 +30,7 @@ jobs:
 
       - name: Configure FFmpeg 3.4.8 for Android ARMv7
         run: |
-          chmod +x configure        # ← вот эту строку добавить!
+          chmod +x configure
           export ANDROID_NDK=$HOME/android-sdk/ndk/21.4.7075529
           export TOOLCHAIN=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64
           export API=21
@@ -38,6 +38,11 @@ jobs:
           export PATH=$TOOLCHAIN/bin:$PATH
           export CC=$TOOLCHAIN/bin/armv7a-linux-androideabi${API}-clang
           export CXX=$TOOLCHAIN/bin/armv7a-linux-androideabi${API}-clang++
+          export AR=$TOOLCHAIN/bin/llvm-ar
+          export AS=$TOOLCHAIN/bin/llvm-as
+          export LD=$TOOLCHAIN/bin/ld.lld
+          export NM=$TOOLCHAIN/bin/llvm-nm
+          export STRIP=$TOOLCHAIN/bin/llvm-strip
 
           ./configure \
             --prefix=$PWD/build/armeabi-v7a \
@@ -46,6 +51,12 @@ jobs:
             --cpu=armv7-a \
             --cross-prefix=$TOOLCHAIN/bin/arm-linux-androideabi- \
             --sysroot=$SYSROOT \
+            --cc=$CC \
+            --cxx=$CXX \
+            --ar=$AR \
+            --as=$AS \
+            --nm=$NM \
+            --strip=$STRIP \
             --enable-cross-compile \
             --enable-shared \
             --disable-static \
