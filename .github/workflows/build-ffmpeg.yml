@@ -30,6 +30,7 @@ jobs:
 
       - name: Configure FFmpeg 3.4.8 for Android ARMv7
         run: |
+          chmod +x configure        # ← вот эту строку добавить!
           export ANDROID_NDK=$HOME/android-sdk/ndk/21.4.7075529
           export TOOLCHAIN=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64
           export API=21
